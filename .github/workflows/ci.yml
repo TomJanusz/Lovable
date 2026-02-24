@@ -8,6 +8,10 @@ on:
     branches: [dev]
   pull_request:
     branches: [main]
+permissions:
+  contents: read
+  security-events: write
+  actions: read
 
 jobs:
   # Backend CI
