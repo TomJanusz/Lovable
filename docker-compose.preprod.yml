@@ -1,0 +1,47 @@
+# Docker Compose - Pre-production
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: collectify-db-preprod
+    environment:
+      POSTGRES_USER: collectify_preprod
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-preprod_password}
+      POSTGRES_DB: collectify_preprod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_preprod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U collectify_preprod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: collectify-api:preprod
+    container_name: collectify-api-preprod
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://collectify_preprod:${POSTGRES_PASSWORD:-preprod_password}@postgres:5432/collectify_preprod
+      JWT_SECRET: ${JWT_SECRET:-collectify-jwt-secret-preprod}
+      PORT: 5000
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+  frontend:
+    image: collectify-web:preprod
+    container_name: collectify-web-preprod
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  postgres_preprod_data:
