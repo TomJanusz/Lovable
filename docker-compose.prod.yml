@@ -1,0 +1,48 @@
+# Docker Compose - Production
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: collectify-db-prod
+    environment:
+      POSTGRES_USER: collectify_prod
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: collectify_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U collectify_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  backend:
+    image: collectify-api:latest
+    container_name: collectify-api-prod
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://collectify_prod:${POSTGRES_PASSWORD}@postgres:5432/collectify_prod
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 5000
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+  frontend:
+    image: collectify-web:latest
+    container_name: collectify-web-prod
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  postgres_prod_data:

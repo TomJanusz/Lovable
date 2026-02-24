@@ -1,0 +1,55 @@
+# Docker Compose - Development
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: collectify-db-dev
+    environment:
+      POSTGRES_USER: collectify_dev
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: collectify_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U collectify_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: collectify-api-dev
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://collectify_dev:dev_password@postgres:5432/collectify_dev
+      JWT_SECRET: collectify-jwt-secret-dev
+      PORT: 5000
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    command: npm run dev
+
+  frontend:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: collectify-web-dev
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+
+volumes:
+  postgres_dev_data:
