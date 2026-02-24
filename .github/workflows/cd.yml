@@ -1,0 +1,142 @@
+# Collectify CD Pipeline
+# Deploys based on branch with semantic versioning
+
+name: CD
+
+on:
+  workflow_run:
+    workflows: 
+    - CI
+    types: 
+    - completed
+    
+permissions:
+  contents: write
+  security-events: write
+  actions: read
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  # DEV deployment
+  deploy-dev:
+    name: Deploy DEV
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build & tag backend
+        run: |
+          docker build -t collectify-api:dev ./server
+
+      - name: Build & tag frontend
+        run: |
+          docker build -t collectify-web:dev -f client/Dockerfile .
+
+      - name: Deploy DEV
+        run: |
+          echo "🚀 Deploying DEV environment"
+          # docker compose -f docker-compose.dev.yml up -d
+
+  # PREPROD deployment
+  deploy-preprod:
+    name: Deploy PREPROD
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/preprod'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run backend tests
+        working-directory: ./server
+        run: |
+          npm ci
+          npm run test
+
+      - name: Run frontend tests
+        run: |
+          npm ci
+          npm run test
+
+      - name: Build & tag images
+        run: |
+          docker build -t collectify-api:preprod ./server
+          docker build -t collectify-web:preprod -f client/Dockerfile .
+
+      - name: Deploy PREPROD
+        run: |
+          echo "🚀 Deploying PREPROD environment"
+          # docker compose -f docker-compose.preprod.yml up -d
+
+  # PROD deployment
+  deploy-prod:
+    name: Deploy PRODUCTION
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run backend tests
+        working-directory: ./server
+        run: |
+          npm ci
+          npm run test
+
+      - name: Run frontend tests
+        run: |
+          npm ci
+          npm run test
+
+      - name: Get version from package.json
+        id: version
+        run: echo "VERSION=$(node -p 'require(\"./server/package.json\").version')" >> $GITHUB_OUTPUT
+
+      - name: Build & tag images
+        run: |
+          # Build backend
+          docker build -t collectify-api:latest ./server
+          docker build -t collectify-api:v${{ steps.version.outputs.VERSION }} ./server
+          # Build frontend
+          docker build -t collectify-web:latest -f client/Dockerfile .
+          docker build -t collectify-web:v${{ steps.version.outputs.VERSION }} -f client/Dockerfile .
+
+      - name: Deploy PRODUCTION
+        run: |
+          echo "🚀 Deploying PRODUCTION v${{ steps.version.outputs.VERSION }}"
+          # docker compose -f docker-compose.prod.yml up -d
+  promote-to-preprod:
+    name: Promote to Preprod
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # important pour push
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Push dev → preprod
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin preprod
+          git checkout preprod
+          git merge origin/dev --no-ff -m "Promote dev → preprod [CI]"
+          git push origin preprod
