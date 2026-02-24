@@ -5,9 +5,10 @@ name: CI
 
 on:
   push:
-    branches: [dev, preprod, main]
+    branches: [dev]
   pull_request:
     branches: [main]
+
 
 jobs:
   # Backend CI
@@ -68,3 +69,4 @@ jobs:
 
       - name: Build frontend image
         run: docker build -t collectify-web:ci -f client/Dockerfile .
+  
