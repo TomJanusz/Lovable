@@ -121,7 +121,7 @@ jobs:
   promote-to-preprod:
     name: Promote to Preprod
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: github.ref == 'refs/heads/dev'
     steps:
       - uses: actions/checkout@v4
         with:
